@@ -1,7 +1,7 @@
 import socket
 import json
 
-IP_VM = '192.168.27.71'
+IP_VM = '192.168.178.71'
 PORT = 8000
 
 def receive_full_message(connection_socket, buff_size, end_sequence): 
@@ -67,65 +67,73 @@ def parse_HTTP_message(http_message):
 def create_HTTP_message(json_msg):
     # Toma un diccionario JSON y lo convierte en un mensaje HTTP
     headers_dict = json_msg.get("headers", {})
-    body = json_msg.get("body", "")
+    body_dict = json_msg.get("body", {})
+
+    # Agregamos el body al json sgn el codigo
+    body = create_HTTP_body(body_dict, headers_dict)
+
     headers_dict["X-ElQuePregunta"] = "jujalag"
     
     # Construimos el mensaje HTTP
     http_message = ""
     for key, value in headers_dict.items():
         if key == "startLine":
-            http_message += headers_dict["startLine"]
+            http_message += headers_dict["startLine"] + "\r\n"
         else:
             http_message += f"{key}: {value}\r\n"
-
 
     # Separador entre headers y body
     http_message += "\r\n"
 
     # Elegimos el cuerpo según el código HTTP de la start line
-    start_line = headers_dict.get("startLine", "")
-    if " 200 " in start_line:
-        with open("./response.html", "r", encoding="utf-8") as file:
-            html_body = file.read()
-        headers_dict["Content-Length"] = str(len(html_body.encode('utf-8')))
-        http_message += html_body
-    else:
-        with open("./ban.html", "r", encoding="utf-8") as file:
-            html_body = file.read()
-        headers_dict["Content-Length"] = str(len(html_body.encode('utf-8')))
-        http_message += html_body
-
+    http_message += body
 
     return http_message
 
 
-def create_HTTP_body(code_HTTP):
-    return True
+def create_HTTP_body(body_dict, headers_dict):
+    start_line = headers_dict.get("startLine", "")
+    version, code = start_line.split(" ", 1)
+    if code == "200":
+        body = load_html_and_set_length(headers_dict, "./response.html")
+    else:
+        body = load_html_and_set_length(headers_dict, "./ban.html")
+
+    body_dict += body
+    return body_dict
 
 
 def read_JSON_file(name, path):
     with open(path, "r", encoding="utf-8") as file:
         data = json.load(file)
-    
     return data
+
+
+def load_html_and_set_length(headers_dict, path):
+    with open(path, "r", encoding="utf-8") as file:
+        body = file.read()
+    headers_dict["Content-Length"] = str(len(body.encode("utf-8")))
+    return body
 
 
 def check(json_msg):
     # docs
     ban_data = read_JSON_file("ban", "./ban.json")
-    for host in ban_data["blocked"]:
-        if host == json_msg["headers"]["Host"]:
-            print(f"{json_msg}")
-            # Host bloqueado: devolvemos start line 403
-            json_msg["Headers"]["startLine"] = "HTTP/1.1 403 ERROR\r\n"
-    
-    return json_msg
+    start_line = json_msg["headers"]["startLine"].strip()
+    method, url, version = start_line.split(" ", 2)
 
+    for blocked in ban_data['blocked']:
+        if url == blocked:
+            # Host bloqueado: devolvemos start line 403
+            json_msg["headers"]["startLine"] = version + " 403 ERROR"
+            return json_msg
+        
+    return json_msg
 
 
 if __name__ == "__main__":
     # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
-    buff_size = 4032
+    buff_size = 4
     end_of_message = "\r\n\r\n"
     addr = (IP_VM, PORT) 
     print('Creando socket - Proxy')
@@ -140,15 +148,16 @@ if __name__ == "__main__":
         print(f"Cliente conectado desde {client_addr}")
 
         client_json = receive_full_message(client_sock, buff_size, end_of_message)
-        code = check(client_json)
-        client_json["headers"]["startLine"] = code
-        
-    
+        check(client_json)  
         client_request = create_HTTP_message(client_json)
-        
+        print(client_request)
+
+        print(f"host de la pag: {client_json["headers"]["Host"]}")
+        host = client_json["headers"]["Host"].strip()
+    
+
         proxy_client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(f"{client_json}")
-        proxy_client_sock.connect((client_json["headers"]["Host"], 80)) 
+        proxy_client_sock.connect((host, 80)) 
         proxy_client_sock.send(client_request.encode())
 
         server_json = receive_full_message(proxy_client_sock, buff_size, end_of_message)
