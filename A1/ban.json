@@ -1,0 +1,5 @@
+{ 
+  "user": "matias.rojas.v@gmail.com",
+  "blocked": ["http://www.dcc.uchile.cl/", "http://cc4303.bachmann.cl/secret", "http.example.com"],
+  "forbidden_words": [{"proxy": "[REDACTED]"}, {"DCC": "[FORBIDDEN]"}, {"biblioteca": "[???]"}]
+}
