@@ -70,7 +70,8 @@ def create_HTTP_message(json_msg):
     body_dict = json_msg.get("body", {})
 
     # Agregamos el body al json sgn el codigo
-    body = create_HTTP_body(body_dict, headers_dict)
+    #body = ""
+    #body = create_HTTP_body(body_dict, headers_dict)
 
     headers_dict["X-ElQuePregunta"] = "jujalag"
     
@@ -86,14 +87,14 @@ def create_HTTP_message(json_msg):
     http_message += "\r\n"
 
     # Elegimos el cuerpo según el código HTTP de la start line
-    http_message += body
+    #http_message += body
 
     return http_message
 
 
 def create_HTTP_body(body_dict, headers_dict):
     start_line = headers_dict.get("startLine", "")
-    version, code = start_line.split(" ", 1)
+    version, code, msg = start_line.split(" ", 2)
     if code == "200":
         body = load_html_and_set_length(headers_dict, "./response.html")
     else:
@@ -128,6 +129,7 @@ def check(json_msg):
             json_msg["headers"]["startLine"] = version + " 403 ERROR"
             return json_msg
         
+    json_msg["headers"]["startLine"] = version + " 200 OK"
     return json_msg
 
 
@@ -138,32 +140,30 @@ if __name__ == "__main__":
     addr = (IP_VM, PORT) 
     print('Creando socket - Proxy')
 
-    proxy_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    proxy_server_socket.bind(addr)
-    proxy_server_socket.listen(3)
+    proxy_server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    proxy_server_sock.bind(addr)
+    proxy_server_sock.listen(3)
     print(f"proxy escuchando en {addr}")
 
     while True:
-        client_sock, client_addr = proxy_server_socket.accept()
+        client_sock, client_addr = proxy_server_sock.accept()
         print(f"Cliente conectado desde {client_addr}")
 
         client_json = receive_full_message(client_sock, buff_size, end_of_message)
-        check(client_json)  
         client_request = create_HTTP_message(client_json)
-        print(client_request)
 
-        print(f"host de la pag: {client_json["headers"]["Host"]}")
-        host = client_json["headers"]["Host"].strip()
-    
+
 
         proxy_client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        proxy_client_sock.connect((host, 80)) 
+        host = (client_json["headers"]["Host"], 80)
+        proxy_client_sock.connect(host)
         proxy_client_sock.send(client_request.encode())
 
-        server_json = receive_full_message(proxy_client_sock, buff_size, end_of_message)
-        server_response = create_HTTP_message(server_json)
 
+        server_json = receive_full_message(proxy_client_sock, buff_size, end_of_message)
+        print(f"{server_json}")
+        #check(server_json) 
+
+        server_response = create_HTTP_message(server_json)
         client_sock.send(server_response.encode())
-        
-        proxy_client_sock.close()
         client_sock.close()
