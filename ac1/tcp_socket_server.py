@@ -4,29 +4,8 @@ import json
 IP_VM = '192.168.1.109'
 PORT = 8000
 
-def receive_full_message(connection_socket, buff_size, end_sequence): 
-    """
-    Recibe un mensaje HTTP completo manejando buffers pequeños.
-    
-    Estrategia:
-    1. Acumula datos en bytes hasta encontrar \r\n\r\n (fin de headers)
-    2. Parsea los headers para extraer Content-Length
-    3. Lee exactamente Content-Length bytes del body
-    
-    ¿Cómo sé si llegó el mensaje completo?
-    - Para HTTP: cuando recibo headers completos (\r\n\r\n) + exactamente Content-Length bytes del body
-    
-    ¿Qué pasa si los headers no caben en mi buffer?
-    - El bucle sigue recibiendo chunks de buff_size hasta encontrar \r\n\r\n
-    - Los bytes se acumulan, así que headers grandes se reciben en múltiples recv()
-    
-    ¿Cómo sé que el HEAD llegó completo?
-    - Cuando encuentro la secuencia \r\n\r\n en los datos acumulados
-    
-    ¿Y el BODY?
-    - Después de encontrar \r\n\r\n, extraigo Content-Length del header
-    - Leo exactamente esa cantidad de bytes; ni más, ni menos
-    """
+def receive_full_msg(connection_socket: socket.socket, buff_size: int, end_sequence) -> str: 
+    #Recibe un mensaje HTTP completo manejando buffers pequeños.  
     full_message = b''
     headers_complete = False
     content_length = 0
@@ -79,17 +58,8 @@ def receive_full_message(connection_socket, buff_size, end_sequence):
     
     return message_str
  
- 
-def contains_end_of_message(message, end_sequence):
-    return message.endswith(end_sequence)
- 
- 
-def remove_end_of_message(full_message, end_sequence):
-    index = full_message.rfind(end_sequence)
-    return full_message[:index]
 
-
-def parse_HTTP_message(http_message):
+def parse_HTTP_msg(http_message: str) -> dict:
     # Toma un mensaje HTTP y lo transforma a JSON permitiendo acceder fácil a la info del mensaje.
     
     head, separator, body = http_message.partition("\r\n\r\n")
@@ -112,7 +82,7 @@ def parse_HTTP_message(http_message):
     return {"headers": headers, "body": parsed_body}
 
 
-def create_HTTP_message(json_msg):
+def create_HTTP_msg(json_msg: dict) -> str:
     # Toma un diccionario JSON y lo convierte en un mensaje HTTP
     headers_dict = json_msg.get("headers", {})
     body = json_msg.get("body", "")
@@ -134,21 +104,21 @@ def create_HTTP_message(json_msg):
     return http_message
 
 
-def read_JSON_file(path):
+def read_JSON(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as file:
         data = json.load(file)
     return data
 
 
-def read_HTML_file(path):
+def read_HTML(path: str) -> str:
     with open(path, "r", encoding="utf-8") as file:
         body = file.read()
     return body
 
 
-def check(json_msg):
+def check(json_msg: dict) -> bool:
     # docs
-    ban_data = read_JSON_file("./ban/ban.json")
+    ban_data = read_JSON("./ban/ban.json")
     start_line = json_msg["headers"]["startLine"].strip()
     method, url, version = start_line.split(" ", 2)
 
@@ -160,8 +130,8 @@ def check(json_msg):
     return True
 
 
-def forbidden_words(json_msg):
-    ban_words = read_JSON_file("./ban/ban.json")
+def forbidden_words(json_msg: dict) -> dict:
+    ban_words = read_JSON("./ban/ban.json")
     body = json_msg.get("body", "")
     for word_dict in ban_words.get('forbidden_words', []):
         for forbidden_word, replacement in word_dict.items():
@@ -185,16 +155,16 @@ if __name__ == "__main__":
     while True:
         client_sock, client_addr = proxy_server_sock.accept()
         print(f"Cliente conectado desde {client_addr}")
-        client_request = receive_full_message(client_sock, buff_size, None)
-        client_request_json = parse_HTTP_message(client_request)
+        client_request = receive_full_msg(client_sock, buff_size, None)
+        client_request_json = parse_HTTP_msg(client_request)
         ban_page = check(client_request_json)
         
         if not ban_page:
             # Página bloqueada: enviar respuesta 403 personalizada
-            ban_response = read_JSON_file("./ban/ban_response.json")
-            body = read_HTML_file("./ban/ban.html")
+            ban_response = read_JSON("./ban/ban_response.json")
+            body = read_HTML("./ban/ban.html")
             ban_response["body"] = body
-            proxy_response = create_HTTP_message(ban_response)
+            proxy_response = create_HTTP_msg(ban_response)
         
         else:
             # Página permitida: conectar al servidor origen
@@ -211,13 +181,13 @@ if __name__ == "__main__":
                 print("Proxy envió la request")
                 
                 # Recibir response del servidor (también con buff_size pequeño)
-                proxy_response = receive_full_message(proxy_client_sock, buff_size, None)
+                proxy_response = receive_full_msg(proxy_client_sock, buff_size, None)
                 print("Proxy recibió la response")
                 
                 # Parsear y filtrar palabras baneadas
-                proxy_response_json = parse_HTTP_message(proxy_response)
+                proxy_response_json = parse_HTTP_msg(proxy_response)
                 proxy_response_json = forbidden_words(proxy_response_json)
-                proxy_response = create_HTTP_message(proxy_response_json)
+                proxy_response = create_HTTP_msg(proxy_response_json)
         
         # Enviar respuesta al cliente
         client_sock.sendall(proxy_response.encode())
