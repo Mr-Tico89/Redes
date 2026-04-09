@@ -1,7 +1,7 @@
 import socket
 import json
 
-IP_VM = '192.168.144.71'
+IP_VM = '192.168.1.109'
 PORT = 8000
 
 def receive_full_msg(connection_socket, buff_size): 
@@ -104,6 +104,7 @@ def read_HTML(path: str) -> str:
 
 
 def read_image(path: str) -> bytes:
+    # sirve para poder leer los archivos jpg
     with open(path, 'rb') as file:
         image_data = file.read()
     return image_data
@@ -138,7 +139,7 @@ def forbidden_words(json_msg: dict) -> dict:
 
 
 if __name__ == "__main__":
-    buff_size = 6
+    buff_size = 4096
     end_sequence = "\n"
     addr = (IP_VM, PORT) 
     print('Creando socket - Proxy')
@@ -162,10 +163,7 @@ if __name__ == "__main__":
         if url.endswith("ban.jpg"):
             image_data = read_image("./ban/ban.jpg")
             # Construir headers para la imagen
-            headers = f"HTTP/1.1 200 OK\r\n"
-            headers += f"Content-Type: image/jpeg\r\n"
-            headers += f"Content-Length: {len(image_data)}\r\n"
-            headers += f"\r\n"
+            headers = f"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {len(image_data)}\r\n\r\n"
             
             # Enviar headers + imagen (binarios)
             client_sock.send(headers.encode() + image_data)
@@ -184,7 +182,9 @@ if __name__ == "__main__":
             else:
                 # Página permitida: conectar al servidor origen
                 host = (client_request_json["headers"]["Host"].strip(), 80)
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as proxy_client_sock:
+                proxy_client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                try:
                     proxy_client_sock.connect(host)
                     print(f"Proxy conectado a {host}")
                     
@@ -200,6 +200,9 @@ if __name__ == "__main__":
                     
                     # Parsear
                     proxy_response_json = parse_HTTP_msg(server_response.decode())
+
+                finally:
+                    proxy_client_sock.close()
 
             # filtrar palabras baneadas y enviar al cliente
             proxy_response_json_ban = forbidden_words(proxy_response_json)

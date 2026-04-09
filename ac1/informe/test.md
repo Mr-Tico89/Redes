@@ -34,3 +34,4 @@ Lectura #21: Se leyeron 6 bytes.
 Lectura #22: Se leyeron 6 bytes.
 Lectura #23: Se leyeron 6 bytes.
 Lectura #24: Se leyeron 5 bytes.
+puede truncar datos y causar parsing inválido.
