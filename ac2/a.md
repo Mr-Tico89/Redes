@@ -1,3 +1,8 @@
+# preguntas
+¿Qué tipo de socket debe usar? Anótelo en su informe el resolver debe usar un socket NOC
+
+
+
 # dig -p8000 @192.168.1.109 www.uchile.cl
 
 
@@ -20,7 +25,7 @@ www.uchile.cl.          300     IN      A       200.89.76.36
 ;; MSG SIZE  rcvd: 47
 
 
-# dig @8.8.8.8 www.uchile.cl
+# dig -p53 @8.8.8.8 www.uchile.cl
 
 ; <<>> DiG 9.20.21-1~deb13u1-Debian <<>> @8.8.8.8 www.uchile.cl
 ; (1 server found)

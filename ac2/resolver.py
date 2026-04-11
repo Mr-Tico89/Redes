@@ -14,7 +14,7 @@ DEBUG_MODE = 1 # 1 = True / 0 = False
 
 
 class DNSCache:
-    #Caché para respuestas DNS que almacena los 3 dominios más consultados de las últimas 20 consultas.
+    #Cache para respuestas DNS que almacena los 3 dominios más consultados de las últimas 20 consultas.
     def __init__(self, max_queries=20, max_cached_domains=3):
         self.max_queries = max_queries
         self.max_cached_domains = max_cached_domains
@@ -23,7 +23,7 @@ class DNSCache:
     
 
     def add_query(self, domain: str, ip: str):
-        # Agrega una consulta al historial y actualiza el caché
+        # Agrega una consulta al historial y actualiza el cache
         self.query_history.append(domain)
         # Mantener solo las últimas 20 consultas
         if len(self.query_history) > self.max_queries:
@@ -34,7 +34,7 @@ class DNSCache:
     
 
     def update_cache(self):
-        # Actualiza el caché para mantener solo los 3 dominios más frecuentes.
+        # Actualiza el cache para mantener solo los 3 dominios más frecuentes.
         if not self.query_history:
             return
         
@@ -47,7 +47,7 @@ class DNSCache:
         sorted_domains = sorted(freq_count.items(), key=lambda x: x[1], reverse=True)
         most_common = sorted_domains[:self.max_cached_domains]
         
-        # Crear nuevo caché solo con los dominios más frecuentes
+        # Crear nuevo cache solo con los dominios más frecuentes
         new_cache = {}
         for domain, _ in most_common:
             if domain in self.cache:
@@ -56,29 +56,29 @@ class DNSCache:
     
 
     def get(self, domain: str):
-        # Obtiene la dirección IP de un dominio del caché.
+        # Obtiene la dirección IP de un dominio del cache.
         return self.cache.get(domain)
     
     
     def is_cached(self, domain: str) -> bool:
-        # Verifica si un dominio está en caché
+        # Verifica si un dominio está en cache
         return domain in self.cache
 
 
-# Instancia global del caché
+# Instancia global del cache
 cache = DNSCache()
 
 
-def send_dns_message(query_name, address, port):
+def send_DNS_msg(query_name, address, port):
     # Acá ya no tenemos que crear el encabezado porque dnslib lo hace por nosotros, 
     # por default pregunta por el tipo A
     qname = query_name
     q = DNSRecord.question(qname)
-    server_address = (address, port)
+    server_addr = (address, port)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         # lo enviamos, hacemos cast a bytes de lo que resulte de la función pack() sobre el mensaje
-        sock.sendto(bytes(q.pack()), server_address)
+        sock.sendto(bytes(q.pack()), server_addr)
         # En data quedará la respuesta a nuestra consulta
         data, _ = sock.recvfrom(4096)
         # le pedimos a dnslib que haga el trabajo de parsing por nosotros
@@ -118,28 +118,28 @@ def rr_to_dict(rr: dnslib.dns.RR) -> dict:
     }
 
 
-def resolver(msg_query: bytes, server_name: str = ".", server_address=(IP_DNS, PORT_DNS), from_cache=False) -> bytes:
+def resolver(msg_query: bytes, server_name: str = ".", server_addr=(IP_DNS, PORT_DNS), from_cache=False) -> bytes:
     #  Resuelve recursivamente una consulta DNS siguiendo el árbol de servidores DNS.
     dns_query = DNSRecord.parse(msg_query)
     qname = dns_query.get_q().get_qname()
     qname_str = str(qname)
     
-    # a) Verificar si la consulta está en caché
+    # a) Verificar si la consulta está en cache
     if not from_cache and cache.is_cached(qname_str):
         cached_ip = cache.get(qname_str)
         if DEBUG_MODE:
-            print(f"(debug) Respondiendo desde caché para {qname_str} -> {cached_ip}")
+            print(f"(debug) Respondiendo desde cache para {qname_str} -> {cached_ip}")
         dns_response = dns_query.reply()
         dns_response.add_answer(RR(qname, QTYPE.A, rdata=A(cached_ip)))
         return dns_response.pack()
     
-    # Si no está en caché, hacer la consulta normal
-    response = send_dns_message(qname, server_address[0], server_address[1])
+    # Si no está en cache, hacer la consulta normal
+    response = send_DNS_msg(qname, server_addr[0], server_addr[1])
     response_json = parse_DNS_msg(response)
     if DEBUG_MODE:
-        print(f"(debug) Consultando {qname} a {server_name} con dirección IP {server_address[0]}")    
+        print(f"(debug) Consultando {qname} a {server_name} con dirección IP {server_addr[0]}")    
 
-    # b) Revisar si la respuesta contiene una respuesta (Answer)
+    # b) Revisar si la respuesta contiene una Answer
     if response_json.get('Answer'):
         # Tomamos las respuestas que sean de tipo A
         dns_response = dns_query.reply()
@@ -151,7 +151,7 @@ def resolver(msg_query: bytes, server_name: str = ".", server_address=(IP_DNS, P
                 ip_answer = ans['rdata']
                 dns_response.add_answer(RR(qname, QTYPE.A, rdata=A(ip_answer)))
             
-            # Actualizar caché con la primera IP encontrada
+            # Actualizar cache con la primera IP encontrada
             first_ip = a_answers[0]['rdata']
             cache.add_query(qname_str, first_ip)
             
@@ -181,7 +181,6 @@ def resolver(msg_query: bytes, server_name: str = ".", server_address=(IP_DNS, P
                     
                 ns_query = DNSRecord.question(ns_name)
                 ns_query_bytes = bytes(ns_query.pack())
-                # Esto ahora retorna BYTES
                 ns_response_bytes = resolver(ns_query_bytes, ns_records[0]['rname'], (IP_DNS, PORT_DNS), from_cache=True)
                     
                 # Como ns_response_bytes es de tipo bytes, debemos parsearlo antes de iterar
@@ -206,7 +205,7 @@ if __name__ == "__main__":
     print('Creando socket NOC - resolver')
     dns_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns_sock.bind(addr)
-    print(f"escuchando NOC en {addr}")
+    print(f"escuchando en {addr}")
 
     while True:
         data, client_addr  = dns_sock.recvfrom(buff_size)
@@ -216,8 +215,9 @@ if __name__ == "__main__":
         response_resolver = resolver(data)
         dns_sock.sendto(response_resolver, client_addr)
         
-        # Mostrar estado del caché
+        # Mostrar estado del cache
         if DEBUG_MODE:
-            print(f"\n(debug) Dominios en caché: {list(cache.cache.keys())}")
+            print(f"\n(debug) Dominios en cache: {list(cache.cache.keys())}")
             print(f"(debug) Historial de consultas (últimas 20): {list(cache.query_history)}\n")
+
         print(f"Respuesta enviada a {addr}\n")

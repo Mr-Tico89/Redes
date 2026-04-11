@@ -104,7 +104,7 @@ def read_HTML(path: str) -> str:
     return body
 
 
-def read_image(path: str) -> bytes:
+def read_IMG(path: str) -> bytes:
     # sirve para poder leer los archivos jpg
     with open(path, 'rb') as file:
         image_data = file.read()
@@ -171,7 +171,7 @@ if __name__ == "__main__":
         
         # Si se solicita ban.jpg, servirla localmente
         if url.endswith("ban.jpg"):
-            image_data = read_image("./ban/ban.jpg")
+            image_data = read_IMG("./ban/ban.jpg")
             # Construir headers para la imagen
             headers = f"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {len(image_data)}\r\n\r\n"
             
@@ -205,12 +205,10 @@ if __name__ == "__main__":
                     proxy_client_sock.send(client_request.encode())
                     print("Proxy envió la request")
                     
-                    # Recibir response del servidor
+                    # Recibir response del servidor y parsear
                     server_response = receive_full_msg(proxy_client_sock, buff_size)
-                    print("Proxy recibió la response")
-                    
-                    # Parsear
                     proxy_response_json = parse_HTTP_msg(server_response.decode())
+                    print("Proxy recibió la response")
 
                 finally:
                     proxy_client_sock.close()
