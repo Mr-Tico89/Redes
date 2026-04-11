@@ -64,7 +64,10 @@ def parse_HTTP_msg(http_message: str) -> dict:
 
     parsed_body = body if separator else ""
 
-    return {"headers": headers, "body": parsed_body}
+    return {
+        "headers": headers,
+        "body": parsed_body
+    }
 
 
 def create_HTTP_msg(json_msg: dict) -> str:
@@ -72,6 +75,7 @@ def create_HTTP_msg(json_msg: dict) -> str:
     headers_dict = json_msg.get("headers", {}) # obtiene los headers del json
     body = json_msg.get("body", "") # obtiene el body del json
     headers_dict["Content-Length"] = len(body)
+
     # Construimos el mensaje HTTP
     http_message = ""
     for key, value in headers_dict.items():
@@ -107,19 +111,13 @@ def read_image(path: str) -> bytes:
     return image_data
 
 
-def check(json_msg: dict) -> bool:
+def check(url: str) -> bool:
     # chekea si la url a la que va a entrar esta baneada o no
     ban_data = read_JSON("./ban/ban.json")
-    start_line = json_msg["headers"]["startLine"].strip() # quitamos /r/n
-    # dividimos el starLine en 3 GET, cc4303.bachmann.cl/secret, HTTP/1.1
-    method, url, version = start_line.split(" ", 2) 
-    
     for blocked in ban_data['blocked']:
         if url == blocked:
-            # Host bloqueado: devolvemos start line 403 error al cliente
-            json_msg["headers"]["startLine"] = version + " 403 ERROR"
             return False
-        
+
     return True
 
 
@@ -128,27 +126,42 @@ def forbidden_words(json_msg: dict) -> dict:
     ban_words = read_JSON("./ban/ban.json")
     body = json_msg.get("body", "")
     for word_dict in ban_words.get('forbidden_words', []):
-        for forbidden_word, replacement in word_dict.items():
-            body = body.replace(forbidden_word, replacement)
-        
+        for forbidden_word, replace in word_dict.items():
+            body = body.replace(forbidden_word, replace)
+
     json_msg["body"] = body
     return json_msg
 
 
 if __name__ == "__main__":
+    # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
     buff_size = 4096
     end_sequence = "\n"
     addr = (IP_VM, PORT) 
     print('Creando socket - Proxy')
 
+    # armamos el socket os parámetros que recibe el socket indican el tipo de conexión
+    # socket.SOCK_STREAM = socket orientado a conexión
     proxy_server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # le indicamos al server socket que debe atender peticiones en la dirección 
+    # address para ello usamos bind
     proxy_server_sock.bind(addr)
+
+    # luego con listen (función de sockets de python) le decimos que puede tener hasta 3 
+    # peticiones de conexión encoladas si recibiera una 4ta petición de conexión la va a rechazar
     proxy_server_sock.listen(3)
+
+    # nos quedamos esperando a que llegue una petición de conexión
     print(f"proxy escuchando en {addr}")
 
     while True:
+        # cuando llega una petición de conexión la aceptamos y 
+        # se crea un nuevo socket que se comunicará con el cliente
         client_sock, client_addr = proxy_server_sock.accept()
         print(f"Cliente conectado desde {client_addr}")
+
+        # recibimos el mensaje y lo parseamos a json
         client_request = receive_full_msg(client_sock, buff_size)
         client_request_json = parse_HTTP_msg(client_request.decode())
         
@@ -167,11 +180,12 @@ if __name__ == "__main__":
             client_sock.close()
             print(f"Imagen enviada a {client_addr}\n")
             continue
-        
+
+        # Si no se revisa si la URL esta baneada o no
         else:
-            ban_page = check(client_request_json)
+            ban_page = check(url)
             if not ban_page:
-                # Página bloqueada: enviar respuesta 403 personalizada
+                # Página bloqueada: enviar respuesta 403 ERROR personalizada
                 proxy_response_json = read_JSON("./ban/ban_response.json")
                 body = read_HTML("./ban/ban.html")
                 proxy_response_json["body"] = body
