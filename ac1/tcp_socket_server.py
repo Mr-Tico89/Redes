@@ -1,20 +1,17 @@
 import socket
 import json
 
+
 IP_VM = '192.168.1.109'
 PORT = 8000
+
 
 def receive_full_msg(connection_socket, buff_size): 
     # 1. Recibir hasta que los HEADERS estén completos
     full_data = b""
     
-    numero_de_lecturas = 0
     while b"\r\n\r\n" not in full_data:
         chunk = connection_socket.recv(buff_size)
-        #if not chunk:
-        #    break  # La conexión se cerró inesperadamente
-        numero_de_lecturas = numero_de_lecturas + 1
-        #print(f"Lectura #" + str(numero_de_lecturas) + ": Se leyeron " + str(len(chunk)) + " bytes.")
         full_data += chunk
 
     # Si no se encontró el fin de headers, retornamos lo que llegó
@@ -25,8 +22,8 @@ def receive_full_msg(connection_socket, buff_size):
     headers_data, body_data_received = full_data.split(b"\r\n\r\n", 1)
 
     # 2. Buscar el Content-Length en los headers
-    # Decodificamos solo los headers (es seguro porque los headers son texto ASCII)
-    headers_text = headers_data.decode('utf-8', errors='ignore')
+
+    headers_text = headers_data.decode()
     content_length = 0
     
     for line in headers_text.split('\r\n'):
@@ -45,7 +42,7 @@ def receive_full_msg(connection_socket, buff_size):
  
     # Reensamblamos el mensaje completo en bytes y lo retornamos
     return headers_data + b"\r\n\r\n" + body_data_received
- 
+
 
 def parse_HTTP_msg(http_message: str) -> dict:
     # Toma un mensaje HTTP y lo transforma a 
